@@ -69,6 +69,18 @@ class OnchainHelpersTest(unittest.TestCase):
                  {"fn": "paused()", "arg": None, "value": {"bool/uint": 0}}]
         self.assertEqual(oc.state_map(state), {"owner": "0xab", "paused": 0})
 
+    def test_token_creator(self):
+        def st(value, arg=None, fn="creator()"):
+            return [{"fn": fn, "arg": arg, "value": value}]
+        creator = "0x1c4cbdf7e17b71f9b9561cbf8379de99eedeb6cb"
+        self.assertEqual(oc.token_creator(st({"address": creator.upper().replace("0X", "0x")})), creator)
+        self.assertIsNone(oc.token_creator([]))
+        self.assertIsNone(oc.token_creator(st({"address": "0x" + "0" * 40})))  # unset
+        self.assertIsNone(oc.token_creator(st({"address": "0x000000000000000000000000000000000000dead"})))
+        self.assertIsNone(oc.token_creator(st({"uint": 5})))
+        self.assertIsNone(oc.token_creator(st({"address": creator}, arg="0x1")))
+        self.assertIsNone(oc.token_creator(st({"address": creator}, fn="creatorFee()")))
+
 
 class LpFeesTest(unittest.TestCase):
     def test_effective_fee_priority(self):

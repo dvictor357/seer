@@ -170,7 +170,8 @@ burns and locks happen). For complete holder or LP coverage on those chains, pas
 - **v4 hooks**: permission bits, verification, owner, decoded fee config for known launchpads
   (adapters in `HOOK_ADAPTERS`).
 - **Holders**: rebuilt from all Transfer logs, live balances, the creator (from the launchpad
-  registry when known; flags a high-nonce relayer that is not the creator), launch snipers.
+  registry or the token's own `creator()` getter when known, else the first mint tx sender; flags a
+  launch sender or high-nonce relayer that is not the creator), launch snipers.
 
 The **dossier** (default `~/.config/seer/dossiers/<chain>/<SYMBOL>-<token>/`) is for studying the
 contracts. `index.md` has a mermaid system map, a contract table and a study order. Each

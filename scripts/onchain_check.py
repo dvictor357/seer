@@ -107,6 +107,15 @@ def state_map(state):
     return out
 
 
+def token_creator(state):
+    """Creator the token records about itself (a creator() getter, as launchpad tokens
+    expose), or None. Beats the launch tx sender, which is often a factory relayer."""
+    a = state_map(state).get("creator")
+    if isinstance(a, str) and a.startswith("0x") and a not in BURN:
+        return a.lower()
+    return None
+
+
 class Checker:
     def __init__(self, chain, pair, rpc_url=None, max_logs=300_000):
         self.chain, self.pair = chain, pair.lower()
@@ -121,7 +130,7 @@ class Checker:
         self.hook = self.pool_manager = None
         self.lp_owner_set = set()
         self.lp_nft_ids = []
-        self.creator = None
+        self.creator = self.creator_source = None
         self.minter = None
         self.log_budget = int(os.environ.get("LOG_BUDGET", 400))
         self.history = "full"
@@ -241,6 +250,8 @@ class Checker:
             tok.setdefault("role_kinds", {})[k] = kind
         if "minter" in live:
             self.minter = live["minter"]
+        if token_creator(state):
+            self.creator, self.creator_source = token_creator(state), "token creator()"
 
         risky = []
         for n in names.values():
@@ -367,11 +378,14 @@ class Checker:
                                   "tx_from": sender, "tx_from_nonce": nonce, "tx_to": tx.get("to"),
                                   "first_mint_to": w_addr(first["topics"][2][2:])}
             self.launch_sender = sender
-            if nonce > 500 and tx.get("to"):
+            if self.creator and sender and sender != self.creator:
+                self.r["creation"]["note"] = (f"launch tx sent by {sender}, not the creator "
+                                              f"({self.creator}, from {self.creator_source})")
+            elif nonce > 500 and tx.get("to"):
                 self.r["creation"]["note"] = ("launch tx sent by a high-nonce wallet through a factory: "
                                               "likely launchpad operator/relayer, not the creator")
             elif not self.creator:
-                self.creator = sender
+                self.creator, self.creator_source = sender, "first mint tx sender"
         holders = {a: b for a, b in bal.items() if b > 1e-9 and a != ZERO}
         self.top_raw = sorted(holders.items(), key=lambda x: -x[1])[:25]
         self.r["holders"] = {"count": len(holders) if self.history == "full" else None,
@@ -860,7 +874,6 @@ class Checker:
 
     # ---------- run ----------
     def run(self):
-        self.creator_source = None
         self.load_pair()
         self.check_token()
         pool_addr = self.pair
@@ -870,11 +883,7 @@ class Checker:
             self.flag("MEDIUM", "liquidity", f"LP analysis failed: {e}")
         if self.version == "v4" and self.pool_manager:
             pool_addr = self.pool_manager
-        if self.creator:
-            self.creator_source = "launchpad registry"
         self.holders()
-        if self.creator and not self.creator_source:
-            self.creator_source = "first mint tx sender"
         self.classify_holders()
         self.snipers(pool_addr)
         self.simulate(pool_addr)
@@ -931,7 +940,7 @@ def _pons_v2(rpc, h, pid, chk):
            "buyback_enabled": bool(w_int(w[12])),
            "note": "fees frozen per pool at registration (hook owner cannot raise them for this pool); "
                    "no beforeSwap permission, so the hook cannot block sells"}
-    chk.creator = cfg["creator"]
+    chk.creator, chk.creator_source = cfg["creator"], "launchpad registry"
     total = cfg["creator_tax_bps"] + cfg["hook_fee_bps"]
     chk.flag("INFO", "hook", f"Pons V2 hook takes {total / 100:.2f}% per swap (hook fee {cfg['hook_fee_bps']} bps"
              f" + creator tax {cfg['creator_tax_bps']} bps), on top of the LP fee")
