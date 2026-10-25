@@ -164,7 +164,9 @@ burns and locks happen). For complete holder or LP coverage on those chains, pas
   the pool. A revert means a possible honeypot or blacklist.
 - **Liquidity**: every LP position (v2 LP tokens, v3/v4 NFTs) with owner, USD value and
   whether it is in range; owner type (burned / contract / EOA / 7702-delegated EOA); and a
-  **locker audit** that checks whether the holder contract has any withdraw/unlock path.
+  **locker audit** that checks whether the holder contract has any withdraw/unlock path. For lockId-keyed
+  lockers (UniversalLockerV3-style) it maps each position NFT to its lock and reports the lock owner,
+  unlock time and migrator, and grades the finding on that live state.
 - **v4 hooks**: permission bits, verification, owner, decoded fee config for known launchpads
   (adapters in `HOOK_ADAPTERS`).
 - **Holders**: rebuilt from all Transfer logs, live balances, the creator (from the launchpad

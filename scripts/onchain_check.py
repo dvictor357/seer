@@ -38,6 +38,8 @@ T_V4_INIT = topic("Initialize(bytes32,address,address,uint24,int24,address,uint1
 T_V4_MODLIQ = topic("ModifyLiquidity(bytes32,address,int24,int24,int256,bytes32)")
 T_V3_MINT = topic("Mint(address,address,int24,int24,uint128,uint256,uint256)")
 T_V3_INCLIQ = topic("IncreaseLiquidity(uint256,uint128,uint256,uint256)")
+# UniversalLockerV3-style lockers key locks by their own lockId, not by the position NFT id
+T_LIQ_LOCKED = topic("LiquidityLocked(uint256,address,address,uint256,bytes32,uint256,uint256)")
 
 V4_FLAGS = [
     (13, "beforeInitialize", ""), (12, "afterInitialize", ""),
@@ -85,6 +87,12 @@ def amounts_for(L, tl, tu, sqrt_p):
     if sqrt_p >= sb:
         return 0.0, L * (sb - sa)
     return L * (sb - sqrt_p) / (sqrt_p * sb), L * (sqrt_p - sa)
+
+
+def fmt_unlock(ts):
+    if ts >= 10 ** 10:  # lockers use type(uint256).max (or similar) for a permanent lock
+        return "never (eternal lock)"
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def state_map(state):
@@ -686,7 +694,35 @@ class Checker:
         n = v["name"] or call_str(self.rpc, a, "name()")
         return f"contract{(' ' + n) if n else ''} ({'verified' if v['verified'] else 'unverified'})"
 
-    def audit_locker(self, a):
+    def resolve_locks(self, a, names, nft_ids):
+        """Map every position NFT the locker holds to its lock record. Returns
+        [{lock_id, nft_id, owner, amount, unlock_time, active}], or None when the
+        locker isn't a known lockId-keyed design or any position can't be matched."""
+        if "getLockInfo(uint256)" not in names.values() or not nft_ids:
+            return None
+        pid = self.pair if self.r.get("v4_pool") else None
+        logs, _ = self.windowed_logs(a, [T_LIQ_LOCKED, None, None, pid] if pid else [T_LIQ_LOCKED])
+        lock_of = {}
+        for lg in logs:
+            d = words(lg["data"])
+            if len(d) >= 4:  # positionManager, tokenId, amount, unlockTime
+                lock_of[w_int(d[1])] = w_int(lg["topics"][1][2:])
+        now = int(self.rpc.block(self.head)["timestamp"], 16)
+        locks = []
+        for tid in nft_ids:
+            lid = lock_of.get(tid)
+            if lid is None:
+                return None
+            w = words(self.rpc.eth_call(a, selector("getLockInfo(uint256)") + enc_uint(lid)))
+            # LockInfo: lockId, owner, tokenId, PoolKey (5 words), amount, unlockTime, ...
+            if len(w) < 10 or w_int(w[0]) != lid or w_int(w[2]) != tid:
+                return None  # layout differs from the one this decoder knows
+            amount, unlock = w_int(w[8]), w_int(w[9])
+            locks.append({"lock_id": lid, "nft_id": tid, "owner": w_addr(w[1]), "amount": amount,
+                          "unlock_time": unlock, "active": amount > 0 and unlock > now})
+        return locks
+
+    def audit_locker(self, a, nft_ids=()):
         """Does the LP-holding contract expose any exit path?"""
         code = self.rpc.code(a)
         bc = analyze_bytecode(code)
@@ -703,11 +739,32 @@ class Checker:
         if fee_fns:
             self.flag("INFO", "liquidity", f"LP holder {a} can collect trading fees ({', '.join(fee_fns)}); "
                       "fee collection does not remove the locked liquidity")
+        locks = self.resolve_locks(a, names, list(nft_ids))
+        migrator = call_addr(self.rpc, a, "MIGRATOR()") if "MIGRATOR()" in names.values() else None
+        state = [s for s in state if s["arg"] is not None]
+        if locks:  # getLockInfo(<nft id>) probes read the wrong key; the resolved locks replace them
+            state = [s for s in state if s["fn"] != "getLockInfo(uint256)"]
         out = {"address": a, "verified": v["verified"], "name": v["name"], "exit_functions": exits,
                "fee_functions": fee_fns,
                "unknown_selectors": unknown, "owner": owner, "delegatecall": bc["has_delegatecall"],
-               "state": [s for s in state if s["arg"] is not None]}
-        if exits:
+               "locks": locks, "migrator": migrator, "state": state}
+        if exits and locks:
+            ids = ", ".join(str(x["lock_id"]) for x in locks)
+            lock_owners = ", ".join(sorted({x["owner"] for x in locks}))
+            until = fmt_unlock(min(x["unlock_time"] for x in locks))
+            if not all(x["active"] for x in locks):
+                self.flag("HIGH", "liquidity", f"LP holder {a}: lock(s) {ids} expired or emptied; lock owner "
+                          f"{lock_owners} can withdraw the liquidity now")
+            elif migrator and migrator != ZERO:
+                self.flag("HIGH", "liquidity", f"LP locked in {a} until {until}, but migrator {migrator} is set: "
+                          f"lock owner {lock_owners} can migrate() the position out before the unlock time")
+            elif "migrate(uint256)" in exits:
+                self.flag("MEDIUM", "liquidity", f"LP locked in {a} until {until} (lock(s) {ids}, owner "
+                          f"{lock_owners}). migrate() skips the unlock time, but no migrator is set; it needs "
+                          f"the locker owner {owner} to set one and the lock owner to call it")
+            else:
+                self.flag("OK", "liquidity", f"LP locked in {a} until {until} (lock(s) {ids}, owner {lock_owners})")
+        elif exits:
             self.flag("HIGH", "liquidity", f"LP holder {a} exposes possible exit path(s): {', '.join(exits)} "
                       f"(owner {owner}). Read the conditions in its source/disassembly.")
         elif unknown:
@@ -762,7 +819,13 @@ class Checker:
         for p in pos:
             if p["kind"].startswith("contract") and p["share_pct"] > 5:
                 lockers[p["owner"]] = lockers.get(p["owner"], 0) + p["share_pct"]
-        lp["locker_audits"] = [dict(self.audit_locker(a), share_pct=s) for a, s in lockers.items()]
+        nfts = {}
+        for p in pos:
+            m = re.search(r"NFT #(\d+)", p["tag"])
+            if m and p["owner"] in lockers:
+                nfts.setdefault(p["owner"], []).append(int(m.group(1)))
+        lp["locker_audits"] = [dict(self.audit_locker(a, nfts.get(a, ())), share_pct=s)
+                               for a, s in lockers.items()]
 
     # ---------- v4 hook ----------
     def check_hook(self, h, pid):
@@ -932,6 +995,11 @@ def report(r):
         for a in lp.get("locker_audits", []):
             L.append(f"  locker audit {a['address']}: exits {a['exit_functions'] or 'none'} | unknown selectors "
                      f"{a['unknown_selectors'] or 'none'} | owner {a['owner']} | per-token state {[(s['fn'], s['value']) for s in a['state']][:4]}")
+            for k in a.get("locks") or []:
+                L.append(f"  lock {k['lock_id']}: NFT #{k['nft_id']} owner {k['owner']} unlock "
+                         f"{fmt_unlock(k['unlock_time'])} {'LOCKED' if k['active'] else 'UNLOCKED/EMPTY'}")
+            if a.get("migrator"):
+                L.append(f"  migrator: {a['migrator']}{' (unset)' if a['migrator'] == ZERO else ''}")
     h = r.get("holders", {})
     L += ["", f"## Holders (rebuilt from {h.get('transfers_scanned')} transfers{', PARTIAL' if h.get('partial') else ''})",
           f"holders {h.get('count')} | top-10 excl. pool/burn "
