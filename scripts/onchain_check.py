@@ -26,7 +26,7 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evm import (BURN, RPC, RPCS, ZERO, BudgetExceeded, RPCError, analyze_bytecode, call_addr,  # noqa: E402
+from evm import (BURN, DOSSIERS, RPC, RPCS, ZERO, BudgetExceeded, RPCError, analyze_bytecode, call_addr,  # noqa: E402
                  call_str, call_uint, eip7702_target, enc_addr, enc_uint, probe_getters,
                  proxy_info, resolve, try_json, verification, w_addr, w_int, words)
 from keccak import keccak256, selector, topic  # noqa: E402
@@ -964,7 +964,7 @@ def main():
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--rpc")
     ap.add_argument("--max-logs", type=int, default=300_000)
-    ap.add_argument("--dossier", help="dossier output dir (default ~/seer-dossiers/<chain>/<SYMBOL>-<token>)")
+    ap.add_argument("--dossier", help="dossier output dir (default ~/.config/seer/dossiers/<chain>/<SYMBOL>-<token>)")
     ap.add_argument("--no-dossier", action="store_true")
     a = ap.parse_args()
     if len(a.target) == 1:
@@ -979,7 +979,7 @@ def main():
     c = Checker(chain, pair, a.rpc, a.max_logs)
     r = c.run()
     if not a.no_dossier:
-        out = a.dossier or os.path.join(os.path.expanduser("~/seer-dossiers"), chain,
+        out = a.dossier or os.path.join(DOSSIERS, chain,
                                         f"{re.sub(r'[^A-Za-z0-9]', '', r.get('symbol') or 'token')}-{c.token}")
         try:
             c.dossier(out)

@@ -170,7 +170,7 @@ burns and locks happen). For complete holder or LP coverage on those chains, pas
 - **Holders**: rebuilt from all Transfer logs, live balances, the creator (from the launchpad
   registry when known; flags a high-nonce relayer that is not the creator), launch snipers.
 
-The **dossier** (default `~/seer-dossiers/<chain>/<SYMBOL>-<token>/`) is for studying the
+The **dossier** (default `~/.config/seer/dossiers/<chain>/<SYMBOL>-<token>/`) is for studying the
 contracts. `index.md` has a mermaid system map, a contract table and a study order. Each
 contract gets a folder with:
 `source/` (if verified) or `interface.sol` (reconstructed), `abi.json`, `state.json`

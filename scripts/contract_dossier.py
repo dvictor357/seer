@@ -16,14 +16,14 @@ import sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evm import (BURN, EXPLORER, RPC, RPCS, analyze_bytecode, disassemble,  # noqa: E402
+from evm import (BURN, DOSSIERS, EXPLORER, RPC, RPCS, analyze_bytecode, disassemble,  # noqa: E402
                  eip7702_target, probe_getters, proxy_info, resolve, save_sources, verification)
 
 RISKY_NAME = re.compile(r"mint|blacklist|bot|fee|tax|pause|upgrade|withdraw|rescue|sweep|recover|emergency|"
                         r"setOwner|transferOwnership|setFactory|migrat|unlock|release|sellTranche|"
                         r"setRouter|exclude|whitelist|limit|trading", re.I)
 
-DEFAULT_OUT = os.path.expanduser("~/seer-dossiers")
+DEFAULT_OUT = DOSSIERS
 
 # Well-known infrastructure: documented, kept as leaves (not expanded further).
 INFRA = {"PoolManager", "PositionManager", "NonfungiblePositionManager", "UniswapV3Factory", "UniswapV2Factory",

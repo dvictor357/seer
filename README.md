@@ -30,7 +30,7 @@ and `cast` commands to study each one.
 git clone https://github.com/dvictor357/seer.git
 cd seer
 
-# who controls this token and its liquidity? (+ dossier in ~/seer-dossiers)
+# who controls this token and its liquidity? (+ dossier in ~/.config/seer/dossiers)
 python3 -I scripts/onchain_check.py "https://dexscreener.com/robinhood/<pair>"
 
 # market read: flow, technicals, risk flags
@@ -42,18 +42,46 @@ python3 -I scripts/screener.py --chain robinhood
 
 Every script takes `--help`. Most take `--json` for machine-readable output.
 
+### Config
+
+Seer keeps everything under `~/.config/seer` (set `SEER_HOME` to move it):
+
+```
+~/.config/seer/
+├── config.json   # optional, see below
+├── dossiers/     # contract dossiers
+└── cache/        # resolved function signatures
+```
+
+`config.json` (every key is optional):
+
+```json
+{
+  "rpc": {
+    "base": "https://your-archive-rpc",
+    "ethereum": ["https://primary-rpc", "https://fallback-rpc"]
+  },
+  "etherscan_api_key": "...",
+  "log_budget": 400
+}
+```
+
+- `rpc`: per-chain RPCs, tried before the built-in public ones.
+- `etherscan_api_key`: optional, adds Etherscan to source verification lookups.
+- `log_budget`: max log requests per on-chain check (default 400).
+
+Environment variables override the file: `RPC_URL`, `ETHERSCAN_API_KEY`, `LOG_BUDGET`.
+`--rpc` on the command line overrides both.
+
 ### RPC
 
 Public RPCs are built in. Many free RPCs cap log ranges, so holder and LP history can be
-partial; Seer says so in the report. For full coverage, pass an archive RPC:
+partial; Seer says so in the report. For full coverage, set an archive RPC in
+`config.json` or pass one per run:
 
 ```bash
 python3 -I scripts/onchain_check.py "<url>" --rpc https://your-archive-rpc
-# or
-export RPC_URL=https://your-archive-rpc
 ```
-
-`ETHERSCAN_API_KEY` is optional and used for source verification lookups.
 
 ### As an agent skill
 
@@ -67,7 +95,7 @@ Then ask things like "is this a rug?", "who owns the LP?" or paste a DexScreener
 
 ## The dossier
 
-`onchain_check.py` writes `~/seer-dossiers/<chain>/<SYMBOL>-<token>/`:
+`onchain_check.py` writes `~/.config/seer/dossiers/<chain>/<SYMBOL>-<token>/`:
 
 - `index.md` – mermaid system map, contract table, suggested study order
 - `contracts/<Name>-<addr>/` – `source/` or `interface.sol`, `abi.json`, `state.json`,

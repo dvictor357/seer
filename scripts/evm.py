@@ -12,7 +12,31 @@ import urllib.request
 from keccak import keccak256, selector
 
 UA = "seer/0.1"
-CACHE = os.path.expanduser("~/.cache/seer")
+# Everything Seer keeps lives under one dir: config.json, dossiers/, cache/.
+HOME = os.path.expanduser(os.environ.get("SEER_HOME") or "~/.config/seer")
+CONFIG_FILE = os.path.join(HOME, "config.json")
+DOSSIERS = os.path.join(HOME, "dossiers")
+CACHE = os.path.join(HOME, "cache")
+
+
+def _load_config():
+    try:
+        with open(CONFIG_FILE) as fh:
+            cfg = json.load(fh)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"error: cannot read {CONFIG_FILE}: {e}")
+    if not isinstance(cfg, dict):
+        raise SystemExit(f"error: {CONFIG_FILE} must be a JSON object, got {type(cfg).__name__}")
+    return cfg
+
+
+CONFIG = _load_config()
+# Config fills in env vars that aren't already set, so env always wins.
+for _key in ("ETHERSCAN_API_KEY", "LOG_BUDGET"):
+    if not os.environ.get(_key) and CONFIG.get(_key.lower()) is not None:
+        os.environ[_key] = str(CONFIG[_key.lower()])
 
 ZERO = "0x" + "0" * 40
 BURN = {ZERO, "0x000000000000000000000000000000000000dead",
@@ -31,6 +55,13 @@ RPCS = {
                  "https://mainnet.optimism.io"],
     "avalanche": ["https://avalanche-c-chain-rpc.publicnode.com"],
 }
+# config.json "rpc": {"<chain>": "<url>" | ["<url>", ...]} is tried before the built-ins.
+_rpc_cfg = CONFIG.get("rpc") or {}
+if not isinstance(_rpc_cfg, dict):
+    raise SystemExit(f'error: "rpc" in {CONFIG_FILE} must map chain -> url(s), e.g. {{"base": "https://..."}}')
+for _chain, _urls in _rpc_cfg.items():
+    _urls = [_urls] if isinstance(_urls, str) else list(_urls)
+    RPCS[_chain] = _urls + [u for u in RPCS.get(_chain, []) if u not in _urls]
 BLOCKSCOUT = {
     "robinhood": "https://robinhoodchain.blockscout.com", "ethereum": "https://eth.blockscout.com",
     "base": "https://base.blockscout.com", "arbitrum": "https://arbitrum.blockscout.com",
