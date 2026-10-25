@@ -103,6 +103,16 @@ Then ask things like "is this a rug?", "who owns the LP?" or paste a DexScreener
 
 Related contracts (owners, factories, implementations, multisigs) are followed up to two hops.
 
+## Tests
+
+Offline unit tests, stdlib `unittest` only (no network, your `~/.config/seer` is not read):
+
+```bash
+python3 -I -B -m unittest discover -s tests
+```
+
+CI runs them on Python 3.8 to 3.14.
+
 ## Data sources
 
 Seer reads public data from chain RPCs, [DexScreener](https://dexscreener.com) and
