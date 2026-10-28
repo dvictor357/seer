@@ -42,7 +42,8 @@ python3 -I scripts/analyze.py "https://dexscreener.com/robinhood/<pair>"
 python3 -I scripts/screener.py --chain robinhood
 ```
 
-Every script takes `--help`. Most take `--json` for machine-readable output.
+Every CLI takes `--help`. Most take `--json` for machine-readable output. (`evm.py` and
+`keccak.py` are shared libraries, not entry points.)
 
 ### Config
 
