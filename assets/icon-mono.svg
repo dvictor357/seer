@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Seer monochrome icon</title>
+  <desc id="desc">Monochrome geometric S inside a hexagonal outline.</desc>
+  <style>:root{--fg:#18232f;--accent:#0f9688}@media(prefers-color-scheme:dark){:root{--fg:#f0f6fc;--accent:#2dd4bf}}</style>
+  <g transform="translate(128 128)"><path d="M0-108L93.53-54V54L0 108L-93.53 54V-54Z" stroke="var(--fg)" stroke-width="6" stroke-linejoin="round"/><g transform="scale(.88)"><path d="M61-65H-28L-65-28L-28 9H18L-8-17H-31L-42-28L-26-44H40Z" fill="var(--fg)"/><path d="M-61 65H28L65 28L28-9H-18L8 17H31L42 28L26 44H-40Z" fill="var(--fg)"/></g></g>
+</svg>

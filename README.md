@@ -1,5 +1,7 @@
 # Seer
 
+<img src="assets/logo.svg" alt="Seer" width="300">
+
 On-chain due diligence for DEX tokens, run from your own machine.
 
 Paste a DexScreener link and Seer tells you who controls the token and its liquidity,
@@ -112,6 +114,18 @@ python3 -I -B -m unittest discover -s tests
 ```
 
 CI runs them on Python 3.8 to 3.14.
+
+## Brand assets
+
+- [`assets/logo.svg`](assets/logo.svg): horizontal logo with an outlined wordmark.
+- [`assets/icon.svg`](assets/icon.svg): square icon for avatars and favicons.
+- [`assets/icon-mono.svg`](assets/icon-mono.svg): monochrome square icon.
+- [`assets/icon.png`](assets/icon.png): transparent 512 × 512 PNG, exported in the light palette.
+
+The SVGs have transparent backgrounds and adapt to the viewer's light/dark preference.
+Use them on a matching background; the PNG has fixed colors. Prefer the SVGs when resizing.
+The Signal Hex symbol was created for Seer; the wordmark is outlined from Arial Bold,
+so no font installation or external assets are needed.
 
 ## Data sources
 
